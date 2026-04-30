@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Delivery Order",
+      "description": "Represents a car delivery request",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "assigned", "in_transit", "delivered", "cancelled"]
+        },
+        "customerName": { "type": "string" },
+        "carModel": { "type": "string" },
+        "carVin": { "type": "string" },
+        "origin": { "type": "string" },
+        "destination": { "type": "string" },
+        "driverId": { "type": "string" },
+        "price": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["status", "customerName", "carModel", "origin", "destination", "createdAt"]
+    },
+    "Driver": {
+      "title": "Delivery Driver",
+      "description": "A driver in the delivery fleet",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "busy", "offline"] },
+        "currentOrderId": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "status", "updatedAt"]
+    },
+    "User": {
+      "title": "System User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["admin", "driver"] },
+        "email": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of car delivery orders"
+    },
+    "/drivers/{driverId}": {
+      "schema": "Driver",
+      "description": "Registered delivery drivers"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and role mapping"
+    }
+  }
+}

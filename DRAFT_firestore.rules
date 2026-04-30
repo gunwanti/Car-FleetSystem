@@ -1,0 +1,103 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'gunvanticareer@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    function isDriver() {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver'
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Helpers ---
+    function isValidOrder(data) {
+      return data.keys().hasAll(['status', 'customerName', 'carModel', 'origin', 'destination', 'createdAt', 'updatedAt']) &&
+             data.status in ['pending', 'assigned', 'in_transit', 'delivered', 'cancelled'] &&
+             data.customerName is string && data.customerName.size() <= 100 &&
+             data.carModel is string && data.carModel.size() <= 100 &&
+             data.origin is string && data.origin.size() <= 200 &&
+             data.destination is string && data.destination.size() <= 200 &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidDriver(data) {
+      return data.keys().hasAll(['name', 'email', 'status', 'updatedAt']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.email == request.auth.token.email &&
+             data.status in ['available', 'busy', 'offline'] &&
+             data.updatedAt == request.time;
+    }
+
+    // --- Collection Matches ---
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId && 
+                     incoming().keys().hasAll(['role', 'email']) &&
+                     incoming().role == 'driver' && // Users can only self-register as drivers
+                     incoming().email == request.auth.token.email;
+      allow update: if isAdmin(); // Only admins can change roles
+    }
+
+    match /orders/{orderId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidOrder(incoming());
+      
+      allow update: if isSignedIn() && (
+        // Admin action: All updates (except immutable fields)
+        (isAdmin() && incoming().createdAt == existing().createdAt) ||
+        
+        // Driver action: Only update status and updatedAt if assigned
+        (existing().driverId == request.auth.uid && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+         incoming().status in ['in_transit', 'delivered'] &&
+         incoming().updatedAt == request.time)
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    match /drivers/{driverId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == driverId && isValidDriver(incoming());
+      allow update: if isSignedIn() && (
+        (request.auth.uid == driverId && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'location', 'updatedAt', 'currentOrderId']) &&
+         incoming().updatedAt == request.time) ||
+        isAdmin()
+      );
+    }
+  }
+}
