@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { auth } from '../lib/firebase';
 
 interface DriverAppProps {
   user: User;
@@ -81,28 +82,51 @@ export default function DriverApp({ user }: DriverAppProps) {
   return (
     <div className="h-full flex flex-col bg-black">
       {/* Top Header */}
-      <header className="p-6 flex items-center justify-between border-b border-zinc-900 bg-zinc-950">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center font-black text-xl">
+      <header className="px-6 py-4 flex items-center justify-between border-b border-zinc-800 bg-zinc-950 relative overflow-hidden">
+        {/* Porsche Animation Background (Driver) */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.08]">
+          <motion.div
+            animate={{ x: ['110%', '-110%'] }}
+            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+            className="h-full flex items-center"
+          >
+            <svg className="h-8 w-auto" viewBox="0 0 100 30">
+              <path fill="orange" d="M10,20 Q10,10 30,10 L70,10 Q90,10 90,20 L95,25 L5,25 Z" />
+              <circle cx="25" cy="25" r="4" fill="orange" />
+              <circle cx="75" cy="25" r="4" fill="orange" />
+            </svg>
+          </motion.div>
+        </div>
+
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg shadow-orange-600/20 text-white">
             {driver.name[0]}
           </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-tight">{driver.name}</h1>
-            <div className="flex items-center gap-1.5">
-              <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", driver.status === 'available' ? 'bg-emerald-500' : 'bg-red-500')} />
-              <span className="text-[10px] uppercase font-black tracking-widest text-zinc-500">{driver.status}</span>
+          <div className="flex flex-col">
+            <h1 className="text-sm font-black tracking-tight text-white uppercase leading-none">{driver.name}</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse shadow-sm", driver.status === 'available' ? 'bg-emerald-500 shadow-emerald-500/50' : 'bg-red-500 shadow-red-500/50')} />
+              <span className="text-[8px] uppercase font-black tracking-[0.2em] text-zinc-500">{driver.status}</span>
             </div>
           </div>
         </div>
-        <button 
-          onClick={toggleStatus}
-          className={cn(
-            "p-3 rounded-xl transition-all",
-            driver.status === 'offline' ? "bg-emerald-600/10 text-emerald-500" : "bg-red-600/10 text-red-500"
-          )}
-        >
-          <Power className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-3 relative z-10">
+          <button 
+            onClick={() => auth.signOut()}
+            className="flex items-center gap-2 p-3 rounded-xl bg-zinc-900 text-zinc-400 hover:text-white transition-all active:scale-95 group"
+          >
+            <LogOut className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+          </button>
+          <button 
+            onClick={toggleStatus}
+            className={cn(
+              "p-3 rounded-xl transition-all shadow-lg active:scale-95",
+              driver.status === 'offline' ? "bg-emerald-600/10 text-emerald-500 shadow-emerald-500/5" : "bg-red-600/10 text-red-500 shadow-red-500/5"
+            )}
+          >
+            <Power className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* Hero Stats */}
