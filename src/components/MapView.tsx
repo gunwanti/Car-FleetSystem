@@ -1,7 +1,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { Driver, Order } from '../types';
-import { Navigation, Flag, User, MapPin } from 'lucide-react';
+import { Navigation, Flag, User, MapPin, Ruler, Target, Home } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -11,15 +11,31 @@ interface MapViewProps {
   missionMode?: boolean;
 }
 
+// Haversine formula for distance calculation in km
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    0.5 - Math.cos(dLat)/2 + 
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    (1 - Math.cos(dLon))/2;
+
+  return R * 2 * Math.asin(Math.sqrt(a));
+};
+
 // Function to create custom Lucide markers
 const createDriverIcon = (name: string, status: string) => {
   const color = status === 'available' ? '#10b981' : status === 'busy' ? '#f59e0b' : '#71717a';
   
   const html = renderToStaticMarkup(
-    <div className="relative flex items-center justify-center">
-      <div className="absolute w-10 h-10 rounded-full animate-ping opacity-20" style={{ backgroundColor: color }} />
-      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-lg border-2 border-zinc-900" style={{ backgroundColor: color }}>
-        <span className="text-[10px] font-black uppercase">{name[0]}</span>
+    <div className="relative flex flex-col items-center">
+      <div className="absolute w-12 h-12 rounded-full animate-ping opacity-10" style={{ backgroundColor: color }} />
+      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-2xl border-2 border-zinc-900 group" style={{ backgroundColor: color }}>
+        <Navigation className={`w-5 h-5 ${status === 'busy' ? 'animate-pulse' : ''}`} />
+      </div>
+      <div className="mt-1 px-2 py-0.5 bg-zinc-900/90 border border-zinc-800 rounded text-[9px] font-black uppercase text-white shadow-lg whitespace-nowrap">
+        {name.split(' ')[0]}
       </div>
     </div>
   );
@@ -27,33 +43,39 @@ const createDriverIcon = (name: string, status: string) => {
   return L.divIcon({
     html,
     className: '',
-    iconSize: [32, 32],
-    iconAnchor: [16, 16]
+    iconSize: [60, 60],
+    iconAnchor: [30, 30]
   });
 };
 
 const createDispatcherIcon = () => {
   const html = renderToStaticMarkup(
-    <div className="relative flex items-center justify-center">
-      <div className="absolute w-12 h-12 rounded-full animate-pulse bg-blue-500/20" />
-      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-lg border-2 border-zinc-900 ring-2 ring-blue-500/20">
-        <Navigation className="w-4 h-4 fill-white" />
+    <div className="relative flex flex-col items-center">
+      <div className="absolute w-14 h-14 rounded-full animate-pulse bg-blue-500/10" />
+      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-2xl border-2 border-zinc-900 ring-4 ring-blue-500/10">
+        <Home className="w-5 h-5 fill-white" />
+      </div>
+      <div className="mt-1 px-2 py-0.5 bg-blue-600 border border-blue-500 rounded text-[9px] font-black uppercase text-white shadow-lg">
+        Logistics Hub
       </div>
     </div>
   );
-  return L.divIcon({ html, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
+  return L.divIcon({ html, className: '', iconSize: [64, 64], iconAnchor: [32, 32] });
 };
 
-const createDestinationIcon = () => {
+const createDestinationIcon = (address: string) => {
   const html = renderToStaticMarkup(
-    <div className="relative flex items-center justify-center">
-      <div className="absolute w-10 h-10 rounded-full bg-orange-600 animate-ping opacity-20" />
-      <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-[0_0_15px_rgba(234,88,12,0.4)] border-2 border-zinc-900 ring-2 ring-orange-500/20">
-        <Flag className="w-5 h-5" />
+    <div className="relative flex flex-col items-center">
+      <div className="absolute w-12 h-12 rounded-full bg-orange-600 animate-ping opacity-10" />
+      <div className="w-12 h-12 bg-orange-600 rounded-3xl flex items-center justify-center text-white shadow-[0_0_25px_rgba(234,88,12,0.6)] border-2 border-zinc-900 ring-4 ring-orange-500/10">
+        <Flag className="w-6 h-6 fill-white" />
+      </div>
+      <div className="mt-1 px-2 py-0.5 bg-orange-600 border border-orange-500 rounded text-[9px] font-black uppercase text-white shadow-lg whitespace-nowrap max-w-[100px] overflow-hidden text-ellipsis">
+        {address.split(',')[0]}
       </div>
     </div>
   );
-  return L.divIcon({ html, className: '', iconSize: [40, 40], iconAnchor: [20, 20] });
+  return L.divIcon({ html, className: '', iconSize: [80, 80], iconAnchor: [40, 40] });
 };
 
 const createOriginIcon = () => {
@@ -108,23 +130,24 @@ function AutoBounds({ drivers, orders, dispatcherLoc, missionMode }: { drivers: 
 }
 
 export default function MapView({ drivers, orders, missionMode }: MapViewProps) {
-  const [dispatcherLoc, setDispatcherLoc] = useState<{lat: number, lng: number} | null>(null);
+  // Default to Pune coordinates (Logistic Hub)
+  const [dispatcherLoc, setDispatcherLoc] = useState<{lat: number, lng: number} | null>({ lat: 18.5204, lng: 73.8567 });
 
   useEffect(() => {
-    if (navigator.geolocation) {
+    if (navigator.geolocation && !missionMode) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setDispatcherLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         (err) => console.error("Dispatcher Geolocation Error:", err),
         { enableHighAccuracy: true }
       );
     }
-  }, []);
+  }, [missionMode]);
 
   return (
     <div className="w-full h-full bg-zinc-950 relative overflow-hidden">
       <MapContainer 
-        center={[20, 0]} 
-        zoom={2} 
+        center={[18.5204, 73.8567]} // Pune
+        zoom={10} 
         style={{ height: '100%', width: '100%', background: '#09090b' }}
         zoomControl={false}
       >
@@ -133,20 +156,35 @@ export default function MapView({ drivers, orders, missionMode }: MapViewProps) 
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
         
-        {/* Draw Mission Route Line */}
-        {missionMode && drivers.length > 0 && orders.length > 0 && drivers[0].location && (
-          <Polyline 
-            positions={[
-              [drivers[0].location.lat, drivers[0].location.lng],
-              [orders[0].dropoff.lat, orders[0].dropoff.lng]
-            ]}
-            pathOptions={{ 
-              color: '#ea580c', 
-              weight: 3, 
-              dashArray: '10, 10', 
-              opacity: 0.6 
-            }}
-          />
+        {/* Draw Mission Route Lines */}
+        {missionMode && drivers.length > 0 && orders.length > 0 && drivers[0].location && dispatcherLoc && (
+          <>
+            {/* Origin to Driver (Current Path) */}
+            <Polyline 
+              positions={[
+                [dispatcherLoc.lat, dispatcherLoc.lng],
+                [drivers[0].location.lat, drivers[0].location.lng]
+              ]}
+              pathOptions={{ 
+                color: '#10b981', 
+                weight: 4, 
+                opacity: 0.8 
+              }}
+            />
+            {/* Driver to Destination (Remaining Path) */}
+            <Polyline 
+              positions={[
+                [drivers[0].location.lat, drivers[0].location.lng],
+                [orders[0].dropoff.lat, orders[0].dropoff.lng]
+              ]}
+              pathOptions={{ 
+                color: '#ea580c', 
+                weight: 3, 
+                dashArray: '8, 12', 
+                opacity: 0.6 
+              }}
+            />
+          </>
         )}
 
         {/* Dispatcher Station */}
@@ -169,7 +207,7 @@ export default function MapView({ drivers, orders, missionMode }: MapViewProps) 
           <Marker 
             key={`dest-${order.id}`} 
             position={[order.dropoff.lat, order.dropoff.lng]} 
-            icon={createDestinationIcon()}
+            icon={createDestinationIcon(order.dropoff.address)}
           >
             <Popup className="custom-popup">
               <div className="p-3 min-w-[180px]">
@@ -267,9 +305,63 @@ export default function MapView({ drivers, orders, missionMode }: MapViewProps) 
           <Navigation className="w-3 h-3 text-emerald-500 animate-pulse" />
           <span className="text-[10px] uppercase font-black tracking-[0.2em] text-white">Grid Manifest Alpha</span>
         </div>
+        
+        {missionMode && drivers.length > 0 && orders.length > 0 && drivers[0].location && dispatcherLoc && (
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="p-4 bg-zinc-900/80 backdrop-blur-lg border border-zinc-800 rounded-2xl shadow-2xl min-w-[220px]"
+          >
+            <div className="flex items-center gap-2 mb-3 border-b border-zinc-800 pb-2">
+               <Target className="w-3 h-3 text-orange-500" />
+               <span className="text-[10px] font-black uppercase tracking-widest text-zinc-100">Mission Intelligence</span>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Home className="w-3 h-3 text-zinc-500" />
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase">From Hub</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-emerald-500">
+                  {getDistance(dispatcherLoc.lat, dispatcherLoc.lng, drivers[0].location.lat, drivers[0].location.lng).toFixed(2)} km
+                </span>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Flag className="w-3 h-3 text-zinc-500" />
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase">Remaining</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-orange-500">
+                  {getDistance(drivers[0].location.lat, drivers[0].location.lng, orders[0].dropoff.lat, orders[0].dropoff.lng).toFixed(2)} km
+                </span>
+              </div>
+
+              {getDistance(drivers[0].location.lat, drivers[0].location.lng, orders[0].dropoff.lat, orders[0].dropoff.lng) < 0.5 && (
+                <div className="pt-2">
+                   <div className="px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded flex items-center justify-center gap-2 animate-pulse">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-[8px] font-black uppercase text-emerald-500">Arrival Vector Detected</span>
+                   </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
       </div>
-      
+
       <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #3f3f46;
+          border-radius: 10px;
+        }
         .leaflet-popup-content-wrapper {
           background: #18181b !important;
           color: white !important;

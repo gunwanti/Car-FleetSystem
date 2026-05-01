@@ -24,16 +24,34 @@ export default function OrderForm({ onClose }: OrderFormProps) {
     e.preventDefault();
     setLoading(true);
     try {
-      // Get current location to offset for destination demo
-      let lat = 34.0522;
-      let lng = -118.2437;
+      // Default to Pune if everything fails
+      let lat = 18.5204;
+      let lng = 73.8567;
       
-      if (navigator.geolocation) {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        });
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
+      // Basic Geocoding simulation for the Pune/Mumbai scenario
+      const dest = formData.destination.toLowerCase();
+      if (dest.includes('mumbai')) {
+        lat = 19.0760;
+        lng = 72.8777;
+      } else if (dest.includes('pune')) {
+        lat = 18.5204;
+        lng = 73.8567;
+      } else if (dest.includes('delhi')) {
+        lat = 28.6139;
+        lng = 77.2090;
+      } else if (dest.includes('bangalore') || dest.includes('bengaluru')) {
+        lat = 12.9716;
+        lng = 77.5946;
+      } else if (navigator.geolocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject);
+          });
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        } catch (e) {
+          // Keep defaults
+        }
       }
 
       await addDoc(collection(db, 'orders'), {
@@ -41,8 +59,8 @@ export default function OrderForm({ onClose }: OrderFormProps) {
         status: 'pending',
         driverId: null,
         dropoff: {
-          lat: lat + (Math.random() - 0.5) * 0.05, 
-          lng: lng + (Math.random() - 0.5) * 0.05,
+          lat: lat + (Math.random() - 0.5) * 0.01, // Small jitter
+          lng: lng + (Math.random() - 0.5) * 0.01,
           address: formData.destination
         },
         createdAt: serverTimestamp(),

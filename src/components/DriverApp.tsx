@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -15,12 +15,17 @@ import {
   ChevronRight,
   LogOut,
   Map as MapIcon,
-  Loader2
+  Loader2,
+  Ruler,
+  Compass,
+  ArrowRight,
+  BookOpen
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, formatDate, getDistance } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth } from '../lib/firebase';
 import MapView from './MapView';
+import Documentation from './Documentation';
 
 interface DriverAppProps {
   user: User;
@@ -32,10 +37,49 @@ export default function DriverApp({ user, isSimulating, onExitSimulation }: Driv
   const [driver, setDriver] = useState<Driver | null>(null);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hubLocation, setHubLocation] = useState<{lat: number, lng: number} | null>({ lat: 18.5204, lng: 73.8567 });
 
-  const [activeTab, setActiveTab] = useState<'mission' | 'route' | 'fleet'>('mission');
+  const [activeTab, setActiveTab] = useState<'mission' | 'route' | 'fleet' | 'manual'>('mission');
   const [deliveriesCount, setDeliveriesCount] = useState(0);
   const [fleetStatus, setFleetStatus] = useState<Driver[]>([]);
+
+  // Telemetry metrics
+  const telemetry = useMemo(() => {
+    if (!driver?.location || !currentOrder?.dropoff) return null;
+    
+    const distToTarget = getDistance(
+      driver.location.lat, 
+      driver.location.lng, 
+      currentOrder.dropoff.lat, 
+      currentOrder.dropoff.lng
+    );
+
+    // Initial origin is usually where they accepted or fixed hub
+    const originLocation = hubLocation || { lat: driver.location.lat, lng: driver.location.lng };
+    const distFromHub = getDistance(
+      originLocation.lat,
+      originLocation.lng,
+      driver.location.lat,
+      driver.location.lng
+    );
+
+    return {
+      distToTarget,
+      distFromHub,
+      isArriving: distToTarget < 0.5,
+      isAtHub: distFromHub < 0.1
+    };
+  }, [driver?.location, currentOrder?.dropoff, hubLocation]);
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setHubLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        null,
+        { enableHighAccuracy: true }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     // Fetch total delivered orders for this driver
@@ -52,23 +96,26 @@ export default function DriverApp({ user, isSimulating, onExitSimulation }: Driv
   }, [user.uid]);
 
   useEffect(() => {
-    if (driver?.status === 'available' || driver?.status === 'busy') {
+    if (driver?.status === 'busy' && currentOrder?.status === 'in_transit') {
       const interval = setInterval(async () => {
-        // Simple simulation: move slightly
-        const currentLat = driver.location?.lat ?? 34.0522;
-        const currentLng = driver.location?.lng ?? -118.2437;
+        const currentLat = driver.location?.lat ?? 18.5204;
+        const currentLng = driver.location?.lng ?? 73.8567;
+        const destLat = currentOrder.dropoff.lat;
+        const destLng = currentOrder.dropoff.lng;
         
-        const newLat = currentLat + (Math.random() - 0.5) * 0.001;
-        const newLng = currentLng + (Math.random() - 0.5) * 0.001;
+        // Move towards destination
+        const step = 0.05; // 5% move for faster visual feedback in demo
+        const newLat = currentLat + (destLat - currentLat) * step;
+        const newLng = currentLng + (destLng - currentLng) * step;
         
         await updateDoc(doc(db, 'drivers', user.uid), {
           location: { lat: newLat, lng: newLng },
           updatedAt: serverTimestamp()
         });
-      }, 5000);
+      }, 3000);
       return () => clearInterval(interval);
     }
-  }, [driver?.status, driver?.location, user.uid]);
+  }, [driver?.status, currentOrder?.status, driver?.location, currentOrder?.dropoff, user.uid]);
 
   useEffect(() => {
     setLoading(true);
@@ -129,7 +176,7 @@ export default function DriverApp({ user, isSimulating, onExitSimulation }: Driv
           }
         },
         (err) => console.error("Geolocation Error:", err),
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
       );
     }
 
@@ -385,7 +432,31 @@ export default function DriverApp({ user, isSimulating, onExitSimulation }: Driv
                    <h2 className="text-[10px] uppercase font-black tracking-[0.3em] text-orange-500">Active Assignment</h2>
                    <span className="text-[10px] font-mono text-zinc-500">#{currentOrder.id.slice(0, 12)}</span>
                  </div>
-  
+   
+                 {/* Telemetry HUD */}
+                 {telemetry && (
+                   <div className="grid grid-cols-2 gap-3 mb-6">
+                      <div className="bg-zinc-900/50 border border-zinc-800 p-3 rounded-2xl flex items-center gap-3">
+                         <div className="p-2 bg-emerald-500/10 rounded-lg">
+                           <Compass className="w-3 h-3 text-emerald-500" />
+                         </div>
+                         <div>
+                            <p className="text-[8px] font-black uppercase text-zinc-500 leading-none">Dist Covered</p>
+                            <p className="text-xs font-mono font-bold text-zinc-200 mt-1">{telemetry.distFromHub.toFixed(2)} km</p>
+                         </div>
+                      </div>
+                      <div className="bg-zinc-900/50 border border-zinc-800 p-3 rounded-2xl flex items-center gap-3">
+                         <div className="p-2 bg-orange-500/10 rounded-lg">
+                           <Target className="w-3 h-3 text-orange-500" />
+                         </div>
+                         <div>
+                            <p className="text-[8px] font-black uppercase text-zinc-500 leading-none">Terminal Range</p>
+                            <p className="text-xs font-mono font-bold text-zinc-200 mt-1">{telemetry.distToTarget.toFixed(2)} km</p>
+                         </div>
+                      </div>
+                   </div>
+                 )}
+
                  {/* Order Card */}
                  <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-8">
                    <div className="flex items-center gap-4 border-b border-zinc-800 pb-6">
@@ -397,27 +468,33 @@ export default function DriverApp({ user, isSimulating, onExitSimulation }: Driv
                        <p className="text-[10px] font-mono text-zinc-500">{currentOrder.carVin}</p>
                      </div>
                    </div>
-  
+   
                    <div className="space-y-6">
                      <div className="flex gap-4">
                        <div className="flex flex-col items-center pt-1">
-                         <div className="w-3 h-3 bg-zinc-800 rounded-full border-2 border-zinc-700" />
+                         <div className="w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                          <div className="w-0.5 h-10 bg-zinc-800" />
                          <MapPin className="w-4 h-4 text-orange-500" />
                        </div>
                        <div className="flex-1 space-y-6">
                          <div>
-                           <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-1">Pickup Information</p>
+                           <div className="flex items-center gap-2 mb-1">
+                             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Logistic Hub Origin</p>
+                             {telemetry?.isAtHub && <span className="text-[7px] bg-emerald-500/10 text-emerald-500 px-1 rounded font-bold">DOCKED</span>}
+                           </div>
                            <p className="text-sm font-bold text-zinc-300">{currentOrder.origin}</p>
                          </div>
                          <div>
-                           <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-1">Destination Logistics</p>
+                           <div className="flex items-center gap-2 mb-1">
+                             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Terminal Destination</p>
+                             {telemetry?.isArriving && <span className="text-[7px] bg-orange-500/10 text-orange-500 px-1 rounded font-bold animate-pulse">ARRIVING</span>}
+                           </div>
                            <p className="text-sm font-bold text-zinc-300">{currentOrder.destination}</p>
                          </div>
                        </div>
                      </div>
                    </div>
-  
+   
                    {currentOrder.status === 'assigned' && (
                      <button 
                        onClick={() => updateOrderStatus('in_transit')}
@@ -426,18 +503,24 @@ export default function DriverApp({ user, isSimulating, onExitSimulation }: Driv
                        Confirm Pickup
                      </button>
                    )}
-  
+   
                    {currentOrder.status === 'in_transit' && (
                      <button 
                        onClick={() => updateOrderStatus('delivered')}
-                       className="w-full h-16 bg-orange-600 text-white font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-orange-600/20 transition-transform active:scale-95 flex items-center justify-center gap-3"
+                       className={cn(
+                        "w-full h-16 font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3",
+                        telemetry?.isArriving 
+                          ? "bg-orange-600 text-white shadow-orange-600/20" 
+                          : "bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-50"
+                       )}
+                       disabled={!telemetry?.isArriving}
                      >
                        <CheckCircle2 className="w-5 h-5" />
-                       Confirm Delivery
+                       {telemetry?.isArriving ? 'Confirm Delivery' : 'Distance Too Large'}
                      </button>
                    )}
                  </div>
-  
+   
                  {/* Client Info */}
                  <div className="p-6 bg-zinc-950 border border-zinc-900 rounded-3xl flex items-center justify-between">
                    <div>
@@ -460,6 +543,15 @@ export default function DriverApp({ user, isSimulating, onExitSimulation }: Driv
             >
                <MapView drivers={[driver]} orders={currentOrder ? [currentOrder] : []} missionMode={true} />
             </motion.div>
+          ) : activeTab === 'manual' ? (
+             <motion.div 
+               key="manual"
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               className="h-full overflow-y-auto"
+             >
+                <Documentation />
+             </motion.div>
           ) : (
              <motion.div 
                key="fleet"
@@ -499,10 +591,11 @@ export default function DriverApp({ user, isSimulating, onExitSimulation }: Driv
       </main>
 
       {/* Bottom Nav */}
-      <footer className="p-4 border-t border-zinc-900 bg-zinc-950 grid grid-cols-3 gap-2">
+      <footer className="p-4 border-t border-zinc-900 bg-zinc-950 grid grid-cols-4 gap-1">
          <BottomNavItem icon={Navigation} active={activeTab === 'mission'} onClick={() => setActiveTab('mission')} label="Mission" />
          <BottomNavItem icon={MapIcon} active={activeTab === 'route'} onClick={() => setActiveTab('route')} label="Route" />
          <BottomNavItem icon={Truck} active={activeTab === 'fleet'} onClick={() => setActiveTab('fleet')} label="Fleet" />
+         <BottomNavItem icon={BookOpen} active={activeTab === 'manual'} onClick={() => setActiveTab('manual')} label="Doc" />
       </footer>
     </div>
   );

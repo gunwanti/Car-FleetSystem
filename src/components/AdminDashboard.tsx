@@ -18,21 +18,23 @@ import {
   AlertCircle,
   Menu,
   LogOut,
-  Trash2
+  Trash2,
+  BookOpen
 } from 'lucide-react';
-import { cn, formatDate } from '../lib/utils';
+import { cn, formatDate, getDistance } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth } from '../lib/firebase';
 import OrderForm from './OrderForm';
 import MapView from './MapView';
 import OrderDetails from './OrderDetails';
+import Documentation from './Documentation';
 
 interface AdminDashboardProps {
   user: User;
   onSimulateDriver: () => void;
 }
 
-type Tab = 'orders' | 'drivers' | 'map';
+type Tab = 'orders' | 'drivers' | 'map' | 'docs';
 
 export default function AdminDashboard({ user, onSimulateDriver }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<Tab>('orders');
@@ -160,6 +162,12 @@ export default function AdminDashboard({ user, onSimulateDriver }: AdminDashboar
             onClick={() => handleTabClick('map')} 
             icon={MapIcon} 
             label="Live Map" 
+          />
+          <NavItem 
+            active={activeTab === 'docs'} 
+            onClick={() => handleTabClick('docs')} 
+            icon={BookOpen} 
+            label="Manual" 
           />
 
           <div className="pt-8 px-3">
@@ -302,6 +310,7 @@ export default function AdminDashboard({ user, onSimulateDriver }: AdminDashboar
                         <th className="px-6 py-4 text-[10px] uppercase font-bold text-zinc-500 tracking-widest italic">Order ID</th>
                         <th className="px-6 py-4 text-[10px] uppercase font-bold text-zinc-500 tracking-widest italic">Vehicle</th>
                         <th className="px-6 py-4 text-[10px] uppercase font-bold text-zinc-500 tracking-widest italic">Route</th>
+                        <th className="px-6 py-4 text-[10px] uppercase font-bold text-zinc-500 tracking-widest italic">Telemetry</th>
                         <th className="px-6 py-4 text-[10px] uppercase font-bold text-zinc-500 tracking-widest italic">Driver</th>
                         <th className="px-6 py-4 text-[10px] uppercase font-bold text-zinc-500 tracking-widest italic">Status</th>
                         <th className="px-6 py-4 text-[10px] uppercase font-bold text-zinc-500 tracking-widest italic text-right">Date</th>
@@ -327,6 +336,28 @@ export default function AdminDashboard({ user, onSimulateDriver }: AdminDashboar
                             <td className="px-6 py-4">
                               <p className="text-sm">{order.origin}</p>
                               <p className="text-[10px] text-zinc-500 uppercase tracking-tighter">to {order.destination}</p>
+                            </td>
+                            <td className="px-6 py-4">
+                              {order.status === 'in_transit' && drivers.find(d => d.id === order.driverId)?.location ? (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock className="w-3 h-3 text-orange-500" />
+                                    <span className="text-[10px] font-mono font-bold text-zinc-300">
+                                      {getDistance(
+                                        drivers.find(d => d.id === order.driverId)!.location.lat,
+                                        drivers.find(d => d.id === order.driverId)!.location.lng,
+                                        order.dropoff.lat,
+                                        order.dropoff.lng
+                                      ).toFixed(2)} km to target
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-zinc-800 h-1 rounded-full overflow-hidden">
+                                    <div className="bg-orange-500 h-full w-2/3 animate-pulse" />
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] uppercase font-bold text-zinc-600 tracking-widest">---</span>
+                              )}
                             </td>
                             <td className="px-6 py-4">
                               <DriverAvatar driver={drivers.find(d => d.id === order.driverId)} />
@@ -434,6 +465,10 @@ export default function AdminDashboard({ user, onSimulateDriver }: AdminDashboar
               <div className="h-[600px] bg-zinc-900/30 border border-zinc-900 rounded-3xl overflow-hidden relative">
                 <MapView drivers={drivers} orders={orders} />
               </div>
+            )}
+
+            {activeTab === 'docs' && (
+              <Documentation />
             )}
           </AnimatePresence>
         </main>
