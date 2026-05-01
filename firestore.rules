@@ -18,14 +18,15 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'gunvanticareer@gmail.com' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
     }
 
     function isDriver() {
-      return isSignedIn() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver'
-      );
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver';
     }
 
     function isValidId(id) {
@@ -42,12 +43,13 @@ service cloud.firestore {
 
     // --- Validation Helpers ---
     function isValidOrder(data) {
-      return data.keys().hasAll(['status', 'customerName', 'carModel', 'carVin', 'origin', 'destination', 'createdAt', 'updatedAt', 'price', 'driverId']) &&
+      return data.keys().hasAll(['status', 'customerName', 'carModel', 'carVin', 'origin', 'destination', 'createdAt', 'updatedAt', 'price', 'driverId', 'dropoff']) &&
              data.status in ['pending', 'assigned', 'in_transit', 'delivered', 'cancelled'] &&
              data.customerName is string && data.customerName.size() <= 100 &&
              data.carModel is string && data.carModel.size() <= 100 &&
              data.origin is string && data.origin.size() <= 200 &&
              data.destination is string && data.destination.size() <= 200 &&
+             data.dropoff.keys().hasAll(['lat', 'lng', 'address']) &&
              data.createdAt == request.time &&
              data.updatedAt == request.time;
     }
@@ -63,12 +65,9 @@ service cloud.firestore {
     // --- Collection Matches ---
 
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow create: if isSignedIn() && request.auth.uid == userId && 
-                     incoming().keys().hasAll(['role', 'email', 'id']) &&
-                     incoming().role in ['driver', 'admin'] && // Users can try to register
-                     incoming().email == request.auth.token.email;
-      allow update: if isAdmin(); // Only admins can change roles
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isAdmin();
     }
 
     match /orders/{orderId} {

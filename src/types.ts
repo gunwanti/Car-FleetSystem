@@ -8,6 +8,11 @@ export interface Order {
   carVin: string;
   origin: string;
   destination: string;
+  dropoff: {
+    lat: number;
+    lng: number;
+    address: string;
+  };
   driverId: string | null;
   price: number;
   createdAt: any;
@@ -26,6 +31,8 @@ export interface Driver {
     lat: number;
     lng: number;
   };
+  rating?: number;
+  deliveriesCount?: number;
   updatedAt: any;
 }
 

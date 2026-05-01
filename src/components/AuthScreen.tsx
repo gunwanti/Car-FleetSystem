@@ -1,5 +1,6 @@
-import { Car, ShieldCheck, Truck, ArrowRight } from 'lucide-react';
-import { motion } from 'motion/react';
+import { useState } from 'react';
+import { Car, ShieldCheck, Truck, ArrowRight, Info, X, Navigation } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthScreenProps {
   onLogin: () => void;
@@ -46,24 +47,25 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       </div>
 
       {/* Right Pane - Login */}
-      <div className="w-full md:w-[450px] flex items-center justify-center p-6 md:p-8 bg-black min-h-[40vh] md:min-h-screen">
+      <div className="w-full md:w-[450px] flex items-center justify-center p-6 md:p-8 bg-black min-h-[40vh] md:min-h-screen relative z-20">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-sm space-y-6 md:space-y-8"
+          className="w-full max-w-sm space-y-6 md:space-y-8 bg-black/80 backdrop-blur-sm p-6 rounded-3xl md:bg-transparent md:p-0 md:rounded-none"
         >
           <div className="space-y-2">
-            <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Access Dashboard</h2>
-            <p className="text-zinc-500 text-sm md:text-base">Sign in with your enterprise credentials to continue.</p>
+            <p className="text-orange-500 font-black uppercase tracking-[0.3em] text-[10px]">Secure Authentication</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight leading-none">Vehicle Dispatch <br />Terminal</h2>
+            <p className="text-zinc-500 text-sm md:text-base mt-2">Log in via the secure Google portal to access your assignment dashboard. This platform facilitates real-time vehicle logistics and manifest management.</p>
           </div>
 
           <div className="space-y-4">
             <button
               onClick={onLogin}
-              className="w-full h-14 bg-white text-black font-bold rounded-full flex items-center justify-center gap-3 hover:bg-zinc-200 transition-colors group"
+              className="w-full h-16 bg-white text-black font-black uppercase tracking-widest text-sm rounded-2xl flex items-center justify-center gap-3 hover:bg-zinc-200 transition-all active:scale-[0.98] group shadow-xl shadow-white/5"
             >
               <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-              Continue with Google
+              Identify Identity
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
 
@@ -130,24 +132,28 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 line-height-relaxed">
                   <div className="space-y-4">
-                    <h3 className="text-white font-bold flex items-center gap-2">
+                    <h3 className="text-white font-bold flex items-center gap-2 uppercase tracking-tighter">
                       <ShieldCheck className="w-4 h-4 text-orange-500" />
-                      Core Features
+                      Operational Roles
                     </h3>
-                    <ul className="text-zinc-500 text-sm space-y-2">
-                      <li>• Real-time Fleet Telemetry & Mapping</li>
-                      <li>• Bi-directional Dispatch Communication</li>
-                      <li>• Automated Manifest Generation</li>
-                      <li>• Encrypted Chain-of-Custody Logging</li>
+                    <ul className="text-zinc-500 text-sm space-y-3">
+                      <li>
+                        <strong className="text-zinc-300 uppercase text-[10px] block">Dispatcher (Admin)</strong>
+                        Monitor the global grid, create delivery orders, and track driver locations in real-time.
+                      </li>
+                      <li>
+                        <strong className="text-zinc-300 uppercase text-[10px] block">Operator (Driver)</strong>
+                        Go online to signal availability, accept car delivery missions, and update shipment status.
+                      </li>
                     </ul>
                   </div>
                   <div className="space-y-4">
-                    <h3 className="text-white font-bold flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-orange-500" />
-                      Operational Logic
+                    <h3 className="text-white font-bold flex items-center gap-2 uppercase tracking-tighter">
+                      <Navigation className="w-4 h-4 text-orange-500" />
+                      Usage Protocol
                     </h3>
-                    <p className="text-zinc-500 text-sm italic">
-                      "FleetStream utilizes edge-cloud synchronization to manage vehicle deliveries with sub-second latency. Designed for high-volume automotive logistics."
+                    <p className="text-zinc-500 text-sm leading-relaxed">
+                      To begin your shift, log in and toggle your <span className="text-orange-500 font-bold uppercase text-[10px]">Duty Status</span>. The terminal will automatically synchronize your GPS coordinates with the central fleet manifest. Use the <strong className="text-zinc-300">Mission Hub</strong> to track your active car assignments from pickup to arrival.
                     </p>
                   </div>
                 </div>
@@ -174,7 +180,3 @@ function TechTag({ label, value }: { label: string, value: string }) {
     </div>
   );
 }
-
-import { Info, X } from 'lucide-react';
-import { useState } from 'react';
-import { AnimatePresence } from 'motion/react';

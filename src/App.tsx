@@ -13,44 +13,72 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSimulatingDriver, setIsSimulatingDriver] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       try {
-        setUser(u);
+        setError(null);
         if (u) {
-          // Fetch or create profile
+          setUser(u);
           const userDoc = await getDoc(doc(db, 'users', u.uid));
+          
           if (userDoc.exists()) {
-            setProfile(userDoc.data() as UserProfile);
-          } else {
-            // Default role is driver unless it's the admin email
-            const isAdmin = u.email === 'gunvanticareer@gmail.com';
-            const newProfile: UserProfile = {
-              id: u.uid,
-              role: isAdmin ? 'admin' : 'driver',
-              email: u.email || '',
-            };
-            await setDoc(doc(db, 'users', u.uid), newProfile);
-            setProfile(newProfile);
+            const profileData = userDoc.data() as UserProfile;
+            setProfile(profileData);
             
-            // If driver, also create driver doc
-            if (!isAdmin) {
+            // Check if driver supplemental profile exists
+            const driverDoc = await getDoc(doc(db, 'drivers', u.uid));
+            if (!driverDoc.exists()) {
                await setDoc(doc(db, 'drivers', u.uid), {
-                 name: u.displayName || 'Unnamed Driver',
+                 name: u.displayName || 'Unnamed User',
                  email: u.email || '',
                  status: 'offline',
-                 location: { lat: 0, lng: 0 },
+                 location: { lat: 34.0522, lng: -118.2437 }, // Default to LA for demo stability
                  updatedAt: serverTimestamp()
                });
             }
+          } else {
+            // Default role is driver unless it's the admin email
+            const isAdminEmail = u.email === 'gunvanticareer@gmail.com';
+            const newProfile: UserProfile = {
+              id: u.uid,
+              role: isAdminEmail ? 'admin' : 'driver',
+              email: u.email || '',
+            };
+            
+            // USE BATCH TO CREATE BOTH AT ONCE
+            const { writeBatch } = await import('firebase/firestore');
+            const batch = writeBatch(db);
+            
+            batch.set(doc(db, 'users', u.uid), newProfile);
+            
+            batch.set(doc(db, 'drivers', u.uid), {
+                name: u.displayName || 'Unnamed User',
+                email: u.email || '',
+                status: 'offline',
+                location: { lat: 34.0522, lng: -118.2437 },
+                updatedAt: serverTimestamp()
+            });
+            
+            await batch.commit();
+            setProfile(newProfile);
           }
         } else {
           setProfile(null);
+          setIsSimulatingDriver(false);
+          setUser(null);
         }
-      } catch (err) {
-        console.error("Auth System Error:", err);
-        setError("Synchronization failure. Please ensure enterprise access permissions.");
+      } catch (err: any) {
+        console.error("Critical Auth System Error:", err);
+        const code = err?.code || 'unknown';
+        const msg = err?.message || 'No detail provided';
+        
+        if (code === 'permission-denied' || msg.includes('permission')) {
+          setError(`Security Fault: Authentication confirmed but terminal access was rejected by the cloud firewall. Code: ${code}. Message: ${msg}`);
+        } else {
+          setError(`Core Synchronization Fault: The fleet terminal connection failed. Code: ${code}. Message: ${msg}`);
+        }
       } finally {
         setLoading(false);
       }
@@ -87,16 +115,31 @@ export default function App() {
     );
   }
 
-  if (!user || !profile) {
+  if (!user) {
     return <AuthScreen onLogin={signInWithGoogle} />;
+  }
+
+  if (!profile) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-zinc-950 text-white">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-orange-500" />
+          <p className="text-[10px] uppercase font-black tracking-[0.3em] text-zinc-500 font-sans">Authorizing Terminal...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="h-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
-      {profile.role === 'admin' ? (
-        <AdminDashboard user={user} />
+      {(profile.role === 'admin' && !isSimulatingDriver) ? (
+        <AdminDashboard user={user} onSimulateDriver={() => setIsSimulatingDriver(true)} />
       ) : (
-        <DriverApp user={user} />
+        <DriverApp 
+          user={user} 
+          isSimulating={profile.role === 'admin'} 
+          onExitSimulation={() => setIsSimulatingDriver(false)} 
+        />
       )}
     </div>
   );

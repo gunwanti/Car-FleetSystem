@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, Plus, Car, MapPin, DollarSign } from 'lucide-react';
+import { X, Plus, Car, MapPin, DollarSign, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { cn } from '../lib/utils';
 
 interface OrderFormProps {
   onClose: () => void;
@@ -23,10 +24,27 @@ export default function OrderForm({ onClose }: OrderFormProps) {
     e.preventDefault();
     setLoading(true);
     try {
+      // Get current location to offset for destination demo
+      let lat = 34.0522;
+      let lng = -118.2437;
+      
+      if (navigator.geolocation) {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject);
+        });
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      }
+
       await addDoc(collection(db, 'orders'), {
         ...formData,
         status: 'pending',
         driverId: null,
+        dropoff: {
+          lat: lat + (Math.random() - 0.5) * 0.05, 
+          lng: lng + (Math.random() - 0.5) * 0.05,
+          address: formData.destination
+        },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -84,7 +102,7 @@ export default function OrderForm({ onClose }: OrderFormProps) {
 
           <InputGroup 
             label="Vehicle VIN" 
-            icon={ShieldCheckIcon} 
+            icon={ShieldCheck} 
             value={formData.carVin}
             onChange={v => setFormData({ ...formData, carVin: v })}
             placeholder="5YJ3E1EAXJF..."
@@ -130,26 +148,6 @@ export default function OrderForm({ onClose }: OrderFormProps) {
   );
 }
 
-function ShieldCheckIcon(props: any) {
-  return (
-    <svg 
-      {...props} 
-      xmlns="http://www.w3.org/2000/svg" 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
-      <path d="m9 12 2 2 4-4" />
-    </svg>
-  );
-}
-
 function InputGroup({ label, icon: Icon, value, onChange, placeholder, fontMono }: any) {
   return (
     <div className="space-y-2">
@@ -171,5 +169,3 @@ function InputGroup({ label, icon: Icon, value, onChange, placeholder, fontMono 
     </div>
   );
 }
-
-import { cn } from '../lib/utils';

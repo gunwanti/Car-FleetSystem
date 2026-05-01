@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order, Driver } from '../types';
 import { 
@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Menu,
-  LogOut
+  LogOut,
+  Trash2
 } from 'lucide-react';
 import { cn, formatDate } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -28,11 +29,12 @@ import OrderDetails from './OrderDetails';
 
 interface AdminDashboardProps {
   user: User;
+  onSimulateDriver: () => void;
 }
 
 type Tab = 'orders' | 'drivers' | 'map';
 
-export default function AdminDashboard({ user }: AdminDashboardProps) {
+export default function AdminDashboard({ user, onSimulateDriver }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<Tab>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -59,6 +61,17 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
     };
   }, []);
 
+  const handleDeleteDriver = async (driverId: string, driverName: string) => {
+    if (window.confirm(`Are you sure you want to decommission Agent ${driverName}? This will remove all field clearance records.`)) {
+      try {
+        await deleteDoc(doc(db, 'drivers', driverId));
+      } catch (error) {
+        console.error("Error decommissioning driver:", error);
+        alert("Failed to remove agent from registry.");
+      }
+    }
+  };
+
   const stats = [
     { label: 'Active Orders', value: orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled').length, icon: Package, color: 'text-orange-500' },
     { label: 'Drivers', value: drivers.filter(d => d.status === 'available').length, icon: Users, color: 'text-emerald-500' },
@@ -81,10 +94,11 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
             transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
             className="h-full flex items-center"
           >
-            <svg className="h-8 w-auto" viewBox="0 0 100 30">
-              <path fill="orange" d="M10,20 Q10,10 30,10 L70,10 Q90,10 90,20 L95,25 L5,25 Z" />
-              <circle cx="25" cy="25" r="4" fill="orange" />
-              <circle cx="75" cy="25" r="4" fill="orange" />
+            <svg className="h-8 w-auto" viewBox="0 0 120 40" fill="orange">
+              <path d="M10,30 L15,25 Q25,10 50,12 L85,15 Q110,18 115,30 Z" />
+              <path d="M115,30 L118,34 L2,34 L5,30 Z" />
+              <circle cx="28" cy="34" r="5" fill="black" stroke="orange" strokeWidth="1" />
+              <circle cx="92" cy="34" r="5" fill="black" stroke="orange" strokeWidth="1" />
             </svg>
           </motion.div>
         </div>
@@ -101,10 +115,11 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
         <div className="flex items-center gap-3 relative z-10">
           <button 
             onClick={() => auth.signOut()} 
-            className="p-3 bg-zinc-900 rounded-xl text-zinc-400 hover:text-red-500 transition-all active:scale-95"
-            title="Sign Out"
+            className="p-3 bg-zinc-900 rounded-xl text-zinc-400 hover:text-red-500 transition-all active:scale-95 flex items-center gap-2 px-4"
+            title="Switch Account"
           >
             <LogOut className="w-5 h-5" />
+            <span className="text-[10px] font-black uppercase tracking-widest md:hidden">Switch</span>
           </button>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
@@ -146,15 +161,28 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
             icon={MapIcon} 
             label="Live Map" 
           />
+
+          <div className="pt-8 px-3">
+             <button 
+                onClick={onSimulateDriver}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 hover:border-orange-500/50 group"
+             >
+               <Navigation className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+               <div className="text-left">
+                 <p className="text-[10px] font-black uppercase tracking-widest leading-none">Simulation</p>
+                 <p className="text-[8px] text-zinc-500 uppercase font-bold mt-1">Driver Portal View</p>
+               </div>
+             </button>
+          </div>
         </nav>
 
         <div className="pt-4 space-y-2">
           <button 
             onClick={() => auth.signOut()}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all text-red-500 hover:bg-red-500/10 group"
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all text-zinc-500 hover:bg-zinc-900 hover:text-white group"
           >
             <LogOut className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            <span className="text-xs font-bold uppercase tracking-widest">Sign Out</span>
+            <span className="text-xs font-bold uppercase tracking-widest">Switch Account</span>
           </button>
 
           <div className="pt-4 border-t border-zinc-900">
@@ -182,10 +210,11 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
               transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
               className="h-full flex items-center"
             >
-              <svg className="h-10 w-auto" viewBox="0 0 100 30">
-                <path fill="white" d="M10,20 Q10,10 30,10 L70,10 Q90,10 90,20 L95,25 L5,25 Z" />
-                <circle cx="25" cy="25" r="4" fill="white" />
-                <circle cx="75" cy="25" r="4" fill="white" />
+              <svg className="h-10 w-auto" viewBox="0 0 120 40" fill="currentColor">
+                <path d="M10,30 L15,25 Q25,10 50,12 L85,15 Q110,18 115,30 Z" />
+                <path d="M115,30 L118,34 L2,34 L5,30 Z" />
+                <circle cx="28" cy="34" r="5" fill="black" stroke="white" strokeWidth="1" />
+                <circle cx="92" cy="34" r="5" fill="black" stroke="white" strokeWidth="1" />
               </svg>
             </motion.div>
           </div>
@@ -265,8 +294,9 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
                   <h2 className="text-lg font-bold">Recent Deliveries</h2>
                 </div>
 
-                <div className="bg-zinc-900/20 border border-zinc-900 rounded-2xl overflow-x-auto">
-                  <table className="w-full text-left min-w-[800px]">
+                <div className="bg-zinc-900/20 border border-zinc-900 rounded-2xl overflow-hidden">
+                  {/* Desktop Table */}
+                  <table className="w-full text-left hidden lg:table">
                     <thead className="bg-zinc-900/50">
                       <tr>
                         <th className="px-6 py-4 text-[10px] uppercase font-bold text-zinc-500 tracking-widest italic">Order ID</th>
@@ -299,16 +329,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
                               <p className="text-[10px] text-zinc-500 uppercase tracking-tighter">to {order.destination}</p>
                             </td>
                             <td className="px-6 py-4">
-                              {order.driverId ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-orange-600 flex items-center justify-center text-[10px] font-bold">
-                                    {drivers.find(d => d.id === order.driverId)?.name[0]}
-                                  </div>
-                                  <span className="text-sm font-medium">{drivers.find(d => d.id === order.driverId)?.name}</span>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-zinc-600 font-bold uppercase tracking-widest">Unassigned</span>
-                              )}
+                              <DriverAvatar driver={drivers.find(d => d.id === order.driverId)} />
                             </td>
                             <td className="px-6 py-4">
                               <StatusBadge status={order.status} />
@@ -321,6 +342,41 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
                       )}
                     </tbody>
                   </table>
+
+                  {/* Mobile Grid */}
+                  <div className="lg:hidden divide-y divide-zinc-900">
+                    {orders.length === 0 ? (
+                      <div className="p-12 text-center text-zinc-600 italic">No orders found.</div>
+                    ) : (
+                      orders.map((order) => (
+                        <div 
+                          key={order.id} 
+                          className="p-4 space-y-4 active:bg-zinc-900 transition-colors"
+                          onClick={() => setSelectedOrder(order)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-sm font-bold text-white">{order.carModel}</p>
+                              <p className="text-[10px] text-zinc-500 font-mono">#{order.id.slice(0, 8)}</p>
+                            </div>
+                            <StatusBadge status={order.status} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                             <div>
+                               <p className="text-zinc-600 font-black uppercase text-[8px] tracking-widest mb-1">Route</p>
+                               <p className="truncate text-zinc-300">{order.origin} → {order.destination}</p>
+                             </div>
+                             <div className="text-right">
+                               <p className="text-zinc-600 font-black uppercase text-[8px] tracking-widest mb-1">Assigned To</p>
+                               <div className="flex justify-end">
+                                 <DriverAvatar driver={drivers.find(d => d.id === order.driverId)} size="xs" />
+                               </div>
+                             </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -334,17 +390,26 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
               >
                 {drivers.map(driver => (
-                  <div key={driver.id} className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-6 hover:border-zinc-700 transition-all group">
+                  <div key={driver.id} className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-6 hover:border-zinc-700 transition-all group relative overflow-hidden">
                     <div className="flex justify-between items-start mb-6">
                       <div className="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center font-black text-xl group-hover:bg-orange-600 transition-colors">
                         {driver.name[0]}
                       </div>
-                      <div className={cn(
-                        "px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest",
-                        driver.status === 'available' ? "bg-emerald-500/10 text-emerald-500" : 
-                        driver.status === 'busy' ? "bg-orange-500/10 text-orange-500" : "bg-zinc-500/10 text-zinc-500"
-                      )}>
-                        {driver.status}
+                      <div className="flex flex-col items-end gap-2">
+                        <div className={cn(
+                          "px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest",
+                          driver.status === 'available' ? "bg-emerald-500/10 text-emerald-500" : 
+                          driver.status === 'busy' ? "bg-orange-500/10 text-orange-500" : "bg-zinc-500/10 text-zinc-500"
+                        )}>
+                          {driver.status}
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteDriver(driver.id, driver.name)}
+                          className="p-2 text-zinc-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          title="Decommission Agent"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                     <h3 className="text-lg font-bold mb-1">{driver.name}</h3>
@@ -403,6 +468,24 @@ function NavItem({ active, onClick, icon: Icon, label }: { active: boolean, onCl
       <Icon className={cn("w-5 h-5", active ? "text-white" : "group-hover:scale-110 transition-transform")} />
       <span className="hidden md:block text-xs font-bold uppercase tracking-widest">{label}</span>
     </button>
+  );
+}
+
+function DriverAvatar({ driver, size = 'sm' }: { driver?: Driver, size?: 'xs' | 'sm' }) {
+  if (!driver) return <span className="text-xs text-zinc-600 font-bold uppercase tracking-widest">Unassigned</span>;
+
+  const sizeClasses = {
+    xs: 'w-5 h-5 text-[8px]',
+    sm: 'w-6 h-6 text-[10px]'
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className={cn("rounded-full bg-orange-600 flex items-center justify-center font-bold text-white", sizeClasses[size])}>
+        {driver.name[0]}
+      </div>
+      <span className={cn("font-medium", size === 'xs' ? 'text-xs' : 'text-sm')}>{driver.name}</span>
+    </div>
   );
 }
 

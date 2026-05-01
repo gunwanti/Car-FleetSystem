@@ -38,6 +38,31 @@ export default function OrderDetails({ order, drivers, onClose }: OrderDetailsPr
     }
   };
 
+  const handleUnassign = async () => {
+    if (!order.driverId) return;
+    setLoading(true);
+    try {
+      const driverId = order.driverId;
+      // Reset order
+      await updateDoc(doc(db, 'orders', order.id), {
+        driverId: null,
+        status: 'pending',
+        updatedAt: serverTimestamp()
+      });
+      // Reset driver
+      await updateDoc(doc(db, 'drivers', driverId), {
+        status: 'available',
+        currentOrderId: null,
+        updatedAt: serverTimestamp()
+      });
+      onClose();
+    } catch (err) {
+      console.error("Unassign Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg">
       <motion.div 
@@ -152,14 +177,27 @@ export default function OrderDetails({ order, drivers, onClose }: OrderDetailsPr
 
           {order.driverId && (
             <section className="space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Assigned Field Agent</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Assigned Field Agent</h3>
+                {order.status === 'assigned' && (
+                  <button 
+                    onClick={handleUnassign}
+                    disabled={loading}
+                    className="text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-400 transition-colors"
+                  >
+                    Unassign Agent
+                  </button>
+                )}
+              </div>
               <div className="p-4 bg-orange-600/10 border border-orange-500/20 rounded-xl flex items-center gap-4">
                  <div className="w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center font-black text-xl">
                    {drivers.find(d => d.id === order.driverId)?.name[0]}
                  </div>
                  <div>
                    <p className="font-bold text-white">{drivers.find(d => d.id === order.driverId)?.name}</p>
-                   <p className="text-[10px] text-orange-500 uppercase font-black tracking-widest">Live in System</p>
+                   <p className="text-[10px] text-orange-500 uppercase font-black tracking-widest">
+                     {order.status === 'assigned' ? 'Waiting for Pickup' : 'Live in System'}
+                   </p>
                  </div>
               </div>
             </section>
